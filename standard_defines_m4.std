@@ -1,0 +1,553 @@
+m4_changequote(<<<,>>>)
+m4_changecom
+m4_define(m4_date, <<<m4_regexp(m4_esyscmd(date '+%Y-%b-%d'), <<<\(.+\)$>>>, <<<\1>>>)>>>)
+m4_define(m4_year, <<<m4_regexp(m4_esyscmd(date '+%Y'), <<<\(.+\)$>>>, <<<\1>>>)>>>)
+
+#-------------------------------------------------------------------------------
+# File        : standard_defines_m4.std
+# Description : This file contains configuration parameters for M4 processing.
+#               Based on these parameters certain parts of the code and scripts
+#               can be removed or parameterized.
+#               For more information on M4 see:
+#                 www.gnu.org/software/m4/manual/m4.html
+#-------------------------------------------------------------------------------
+
+m4_define(M4_EVAL, <<<m4_eval($1)>>>)
+m4_define(M4_EVAL_RADIX, <<<m4_eval($1, $2)>>>)
+m4_define(M4_EVAL_WIDTH, <<<m4_eval($1, 10, $2)>>>)
+m4_define(M4_EVAL_RADIX_WIDTH, <<<m4_eval($1, $2, $3)>>>)
+m4_define(M4_FORMAT, <<<m4_format($1)>>>)
+
+#-------------------------------------------------------------------------------
+# The following macros do the same as M4__EVAL, but format the output
+# right-aligned 2, 3, or 4 characters wide. This is useful for creating nicely
+# aligned variable-width signal or port lists like so:
+#
+# input [M4_EVAL2(AW-1):0] addr;
+#
+# With AW = 10, this results in:
+#
+# input [ 9:0] addr;
+#
+# With AW = 11, this results in:
+#
+# input [10:0] addr;
+#
+# and this will in both cases align nicely with the rest of the port list:
+#
+# input [ 3:0] web;
+# input        clk;
+#-------------------------------------------------------------------------------
+m4_define(M4_EVAL2, <<<m4_format(%2d, m4_eval($1))>>>)
+m4_define(M4_EVAL3, <<<m4_format(%3d, m4_eval($1))>>>)
+m4_define(M4_EVAL4, <<<m4_format(%4d, m4_eval($1))>>>)
+m4_define(M4_EVAL5, <<<m4_format(%5d, m4_eval($1))>>>)
+
+# Define conditional compilation/text insertion directives
+m4_define(_dvrt,    <<<m4_ifelse(if_stk, 1, <<<m4_divert(0)m4_dnl>>>, <<<m4_divert(-1)m4_dnl>>>)>>>)
+m4_define(M4_IF,    <<<m4_ifelse(if_stk, 1, <<<m4_pushdef(<<<if_stk>>>, m4_ifelse(m4_eval(<<<$1>>>),0,0,1))>>>,
+                    <<<m4_pushdef(<<<if_stk>>>,-1)>>>)_dvrt>>>)
+m4_define(M4_ELSE,  <<<m4_define(<<<if_stk>>>,m4_ifelse(if_stk,1,0,if_stk,0,1,-1))_dvrt>>>)
+m4_define(M4_ELSEIF,<<<m4_define(<<<if_stk>>>,m4_ifelse(if_stk,1,0,if_stk,0,1,-1))_dvrt>>>
+<<<m4_ifelse(if_stk, 1, <<<m4_popdef(<<<if_stk>>>)>>><<<m4_pushdef(<<<if_stk>>>, m4_ifelse(m4_eval(<<<$1>>>),0,0,1))>>>,
+<<<m4_popdef(<<<if_stk>>>)>>><<<m4_pushdef(<<<if_stk>>>,-1)>>>)_dvrt>>>)
+m4_define(M4_ENDIF, <<<m4_popdef(<<<if_stk>>>)_dvrt>>>)
+m4_define(M4_IFNOT, <<<m4_ifelse(if_stk,1,<<<m4_pushdef(<<<if_stk>>>,m4_ifelse(m4_eval(<<<$1>>>),0,1,0))>>>,
+                    <<<m4_pushdef(<<<if_stk>>>,-1)>>>)_dvrt>>>)
+m4_define(if_stk, 1)
+
+#-------------------------------------------------------------------------------
+# The M4_PRINTL / M4_PRINT macros are meant to conditionally include text on
+# or inside a single line. This often looks clearer than a M4__IF/M4__ENDIF
+# block, which can not even be used within a line.
+#
+# Below are some illustrations of how these macros can be used.
+#-------------------------------------------------------------------------------
+# m4_define(M4_ON, <<<1>>>)
+#
+# Begin<<<>>>M4_IFPRINT(M4_ON, Mid)End
+# BeginMidEnd
+#
+# Begin<<<>>>M4_IFPRINT(!M4_ON, Mid)End
+# BeginEnd
+#
+# M4_IFPRINTL(M4_ON, On)
+# On
+#
+# M4_IFPRINTL(!M4_ON, Off)
+#
+# M4_IFPRINTL(M4_ON, On, Off)
+# On
+#
+# M4_IFPRINTL(!M4_ON, On, Off)
+# Off
+#
+# Begin<<<>>>M4_IFPRINT(M4_ON, MidL, MidR)End
+# BeginMidLEnd
+#
+# Begin<<<>>>M4_IFPRINT(!M4_ON, MidL, MidR)End
+# BeginMidREnd
+#
+# M4_IFPRINTL(M4_ON, Off? M4_IFPRINT(M4_ON, <<<No<<<, >>>>>>M4_IFPRINT(M4_ON, it's on.)), <<<Yes, it's off.>>>)
+# Off? No, it's on.
+#
+# M4_IFPRINTL(!M4_ON, , Off? <<<M4_IFPRINT(!M4_ON, <<<No, it's on.>>>, <<<Yes, it's off.>>>>>>))
+# Off? Yes, it's off.
+#-------------------------------------------------------------------------------
+m4_define(M4_IFPRINTL, <<<m4_ifelse(m4_eval(<<<$1>>>), 1, <<<$2>>>, <<<m4_ifelse(<<<$3>>>, <<<>>>, <<<m4_dnl>>>, <<<$3>>>)>>>)>>>)
+m4_define(M4_IFPRINT, <<<m4_ifelse(m4_eval(<<<$1>>>), 1, <<<$2>>>, <<<$3>>>)>>>)
+
+#-------------------------------------------------------------------------------
+# The M4_STRCMP macro can be useful when comparing configurations against
+# letters but is can also compare longer strings. The macro returns 1 on
+# equality and 0 on inequality. As a result, it can be used in practically any
+# M4 macro that takes a Boolean argument.
+#
+# Example usage in if-elsif-end:
+# IF(M4_STRCMP(EIP_CONFIG, <<<a>>>))
+# - Speed grade A
+# ELSEIF(M4_STRCMP(EIP_CONFIG, <<<b>>>))
+# - Speed grade B
+# ELSE
+# - Unknown speed grade
+# ENDIF
+#
+# Example of negative usage (notice the ! in front of the macro):
+# IF(!M4_STRCMP(CUSTOM_CONFIGURATION, <<<cd-x>>>))
+# - Standard configuration
+# ENDIF
+#-------------------------------------------------------------------------------
+m4_define(M4_STRCMP, <<<m4_ifelse(<<<$1>>>, <<<$2>>>, 1, 0)>>>)
+
+#-------------------------------------------------------------------------------
+# Use these for formatting stuff in for example release notes.
+# Example: M4_STRLWR(CONFIGURATION)
+#-------------------------------------------------------------------------------
+m4_define(<<<M4_STRLWR>>>, <<<m4_translit(<<<$*>>>, <<<A-Z>>>, <<<a-z>>>)>>>)
+m4_define(<<<M4_STRUPR>>>, <<<m4_translit(<<<$*>>>, <<<a-z>>>, <<<A-Z>>>)>>>)
+
+# forloop(var, from, to, stmt):
+#   works even if VAR is not a strict macro name
+#   allows complex numerical expressions in TO and FROM.
+#   FORLOOP can only count up and does not do anything when TO < FROM.
+#   FORLOOPG works both ways: It counts up when FROM <= TO, else down.
+m4_define(M4_FORLOOP,
+  <<<m4_ifelse(m4_eval(<<<($2) <= ($3)>>>), <<<1>>>,
+  <<<m4_pushdef(<<<$1>>>)_$0(<<<$1>>>, m4_eval(<<<$2>>>),
+  m4_eval(<<<$3>>>), <<<$4>>>)m4_popdef(<<<$1>>>)>>>)>>>)
+m4_define(<<<_M4_FORLOOP>>>,
+  <<<m4_define(<<<$1>>>, <<<$2>>>)$4<<<>>>m4_ifelse(<<<$2>>>, <<<$3>>>, <<<>>>,
+  <<<$0(<<<$1>>>, m4_incr(<<<$2>>>), <<<$3>>>, <<<$4>>>)>>>)>>>)
+m4_define(M4_FORLOOPG,
+  <<<m4_pushdef(<<<$1>>>)_$0(<<<$1>>>, m4_eval(<<<$2>>>),
+  m4_eval(<<<$3>>>), <<<$4>>>, m4_ifelse(m4_eval(<<<($2) <= ($3)>>>), 1, 1, -1))m4_popdef(<<<$1>>>)>>>)
+m4_define(<<<_M4_FORLOOPG>>>,
+  <<<m4_define(<<<$1>>>, <<<$2>>>)$4<<<>>>m4_ifelse(<<<$2>>>, <<<$3>>>, <<<>>>,
+  <<<$0(<<<$1>>>, m4_eval(<<<($2)+($5)>>>), <<<$3>>>, <<<$4>>>, <<<$5>>>)>>>)>>>)
+
+
+#-------------------------------------------------------------------------------
+# Useful math?
+#-------------------------------------------------------------------------------
+m4_define(M4_ISEVEN, <<<m4_ifelse(m4_eval(($1) & 1), 1, 0, 1)>>>)
+m4_define(M4_ISODD,  <<<m4_ifelse(m4_eval(($1) & 1), 1, 1, 0)>>>)
+m4_define(M4_MIN,    <<<m4_ifelse(m4_eval(<<<($1) < ($2)>>>), 1, m4_eval(<<<($1)>>>), m4_eval(<<<($2)>>>))>>>)
+m4_define(M4_MAX,    <<<m4_ifelse(m4_eval(<<<($1) > ($2)>>>), 1, m4_eval(<<<($1)>>>), m4_eval(<<<($2)>>>))>>>)
+
+#-------------------------------------------------------------------------------
+# Some useful log2 functions
+# LOG2A returns the number of bits needed to encode n addresses (starting at address 0).
+#       Also useful to get the number of tree layers needed for n leaves.
+# LOG2B returns the number of bits needed to encode value n.
+# LOG2I returns the log2 of n after first rounding n down towards the next power
+#       of two. This can be useful for ranging wires according to a number of
+#       addresses or instantiated modules:
+#       e.g. wire [LOG2I(M4_MAX_ADDR-1):0] addr;
+#            wire [LOG2I(M4_NUM_ENG-1):0]  pe_sel;
+# ISPOW2 returns 1 for numbers that are a whole power of two: 1, 2, 4, 8, ...
+#
+# Notes:
+# - It is ok to pass complex expressions as an argument.
+# - m4 works with 32-bit signed integers so 0x7fffffff is the highest number
+#   that can be used as is with these macros.
+# - Negative arguments return 0.
+#
+# For making a choice about which function to choose, here is a table to show
+# what each function returns:
+#
+# n: A, B, I, P2
+# 0: 0, 1, 0, 0
+# 1: 1, 1, 0, 1
+# 2: 1, 2, 1, 1
+# 3: 2, 2, 1, 0
+# 4: 2, 3, 2, 1
+# 5: 3, 3, 2, 0
+# 6: 3, 3, 2, 0
+# 7: 3, 3, 2, 0
+# 8: 3, 4, 3, 1
+# 9: 4, 4, 3, 0
+#
+#-------------------------------------------------------------------------------
+m4_define(M4_LOG2A, <<<m4_ifelse(m4_eval(<<<($1) > 0>>>), 1, m4_eval(M4_LOG2B(($1) - 1)), 0)>>>)
+m4_define(M4_LOG2B, <<<m4_ifelse(m4_eval(<<<($1) >= 0>>>), 1, m4_eval(_M4_LOG2B(m4_eval(($1) >> 1)) + 1), 0)>>>)
+m4_define(M4_LOG2I, <<<m4_ifelse(m4_eval(<<<($1) > 1>>>), 1, m4_eval(_M4_LOG2I(m4_eval(($1) >> 1)) + 1), 0)>>>)
+m4_define(<<<_M4_LOG2B>>>, <<<m4_ifelse(m4_eval(<<<($1) > 0>>>), 1, <<<$0(($1) >> 1) + 1>>>, 0)>>>)
+m4_define(<<<_M4_LOG2I>>>, <<<m4_ifelse(m4_eval(<<<($1) > 1>>>), 1, <<<$0(($1) >> 1) + 1>>>, 0)>>>)
+m4_define(M4_ISPOW2, <<<m4_ifelse(m4_eval((($1) <= 0) || ((($1) > 1) && M4_ISODD(($1)))), 1, 0, m4_eval(<<<($1)>>>), 1, 1, <<<m4_eval($0(($1) >> 1))>>>)>>>)
+
+# Define timescale  macros
+m4_define(M4_TIMESCALE, <<<`timescale 1ns/10ps>>>)
+
+# Define "always" macro
+# reset type (sync/async) depends on setting of "M4_SYNC_RESET"
+# use: M4_ALWAYS(<clk>,<rst>,<p_name>)
+m4_define(M4_ALWAYS, <<<m4_ifelse(M4_SYNC_RESET, 1, <<<// synopsys sync_set_reset "$2"
+always @(posedge $1)
+  begin : $3
+    if (!$2)>>>,
+<<<always @(posedge $1 or negedge $2)
+  begin : $3
+    if (!$2)>>>)>>>)
+
+# Define "always_ff" macro
+# reset type (sync/async) depends on setting of "M4_SYNC_RESET"
+# use: M4_ALWAYS_FF(<clk>,<rst>,<p_name>)
+m4_define(M4_ALWAYS_FF, <<<m4_ifelse(M4_SYNC_RESET, 1, <<<// synopsys sync_set_reset "$2"
+always_ff @(posedge $1)
+  begin : $3
+    if (!$2)>>>,
+<<<always_ff @(posedge $1 or negedge $2)
+  begin : $3
+    if (!$2)>>>)>>>)
+
+# Define "always" macro with clock enable
+# reset type (sync/async) depends on setting of "M4_SYNC_RESET"
+# CE availability depends on "M4_SYNC_ENABLE" switch
+# use: M4_ALWAYS_CE(<clk>,<rst>,<ce>,<p_name>)
+m4_define(M4_ALWAYS_CE,<<<m4_ifelse(M4_SYNC_RESET, 1, <<<m4_ifelse(M4_SYNC_ENABLE, 1,
+<<<// synopsys sync_set_reset "$2"
+always @(posedge $1)
+  begin : $4
+    if ($2 and !$3) begin
+      // hold
+    end else if (!$2)>>>,
+<<<// synopsys sync_set_reset "$2"
+always @(posedge $1)
+begin : $4
+  if (!$2)>>>)>>>, <<<m4_ifelse(M4_SYNC_ENABLE, 1,
+<<<always @(posedge $1 or negedge $2)
+  begin : $4
+    if ($2 and !$3) begin
+      // hold
+    end else if (!$2)>>>,
+<<<always @(posedge $1 or negedge $2)
+  begin : $4
+    if (!$2)>>>)>>>)>>>)
+
+
+#-------------------------------------------------------------------------------
+# Use this to check M4 param values.
+# Especially in case a param can cause infinite loops
+# This macro checks the condition provided in the first argument
+# If it fails, it prints "Assert Error: " and the user provided text from second argument
+# (these are printed to the file and stderr.)
+# Then stop proccessing the current file and exit.
+#
+# Example:
+# M4_ASSERT(M4_SYNCN_NRFLOPS>=2, <<<Number of sync flops needs to be 2 or more>>>)
+#-------------------------------------------------------------------------------
+m4_define(M4_ASSERT, <<<m4_ifelse(m4_eval(<<<$1>>>), 0, <<<Assert Error: $2
+>>><<<m4_errprint(<<<Assert Error: $2
+>>>)>>><<<m4_m4exit(1)>>>, <<<m4_dnl>>>)>>>)
+
+
+#-------------------------------------------------------------------------------
+# Use these to convert frequency parameter in MHz (e.g. M4_FREQUENCY or a
+# module local parameter) to a clock period in ns or ps.
+# This can be used in synthesis constraint files like so:
+#
+# set clk_period     M4_MHZ_TO_NS(M4_FREQUENCY)  ; # M4_FREQUENCY MHz is the target frequency
+#
+# Note that this macro truncates the resulting period after 6 or 3 decimals.
+# This way the error is always on the conservative side!
+#-------------------------------------------------------------------------------
+m4_define(M4_MHZ_TO_NS, <<<m4_eval(1000 / <<<$1>>>).m4_eval((1000000000 / <<<$1>>>) % 1000000, 10, 6)>>>)
+m4_define(M4_MHZ_TO_PS, <<<m4_eval(1000000 / <<<$1>>>).m4_eval((1000000000 / <<<$1>>>) % 1000, 10, 3)>>>)
+
+#-------------------------------------------------------------------------------
+# Define comment variables
+# M4_INTERNAL_COMMENT = <<<0>>> : Internal comment is removed from file
+# M4_INTERNAL_COMMENT = <<<1>>> : Internal comment is inserted in file
+# M4_CUSTOMER_COMMENT = <<<0>>> : Customer comment is removed from file
+# M4_CUSTOMER_COMMENT = <<<1>>> : Customer comment is inserted in file
+#-------------------------------------------------------------------------------
+m4_define(M4_INTERNAL_COMMENT, <<<0>>>)
+m4_define(M4_CUSTOMER_COMMENT, <<<1>>>)
+
+# defines to be used for better readability of customization files
+m4_define(M4_YES, <<<1>>>)
+m4_define(M4_NO,  <<<0>>>)
+m4_define(M4_ASYNC, <<<1>>>)
+m4_define(M4_SYNC,  <<<0>>>)
+
+m4_define(M4_CUSTOM_MODULENAME,<<<>>>)
+m4_define(M4_CUSTOM_CONFIGURATION, <<<>>>)
+m4_define(M4_CUSTOM_VERSION, <<<>>>)
+m4_define(M4_CUSTOM_VERSION_MAJOR, <<<0>>>)
+m4_define(M4_CUSTOM_VERSION_MINOR, <<<0>>>)
+m4_define(M4_CUSTOM_VERSION_PATCH, <<<0>>>)
+
+#-------------------------------------------------------------------------------
+# For release notes and packaging, we need these to yield the correct
+# identifier, independent on whether the HW or FW configuration file is used.
+# Exception: CUSTOM_VERSION can differ between HW and FW...
+#-------------------------------------------------------------------------------
+m4_define(M4_HWPKGID, <<<M4_HWVERSION<<<>>>m4_ifelse(M4_HW_RELEASE_LABEL, <<<>>>, <<<>>>, <<<_>>>M4_HW_RELEASE_LABEL)<<<>>>m4_ifelse(M4_CUSTOM_VERSION, <<<>>>, <<<>>>, <<<->>>M4_CUSTOM_VERSION)>>>)
+m4_define(M4_FWPKGID, <<<M4_FWVERSION<<<>>>m4_ifelse(M4_FW_RELEASE_LABEL, <<<>>>, <<<>>>, <<<_>>>M4_FW_RELEASE_LABEL)<<<>>>m4_ifelse(M4_CUSTOM_VERSION, <<<>>>, <<<>>>, <<<->>>M4_CUSTOM_VERSION)>>>)
+#-------------------------------------------------------------------------------
+# These are used in many packaging related files and release notes as a
+# shorthand for the configuration name.
+# Notes:
+# 1) These macros can only be used at the top level of a module. Therefore, do
+#    not use them for anything else than packaging related files.
+# 2) The result includes the "EIP number". See *CONFIGLTR for macros that just
+#    contain the configuration letters string.
+#-------------------------------------------------------------------------------
+m4_define(M4_HWCONFIGSTR, <<<m4_regexp>>>(M4_HWCONFIG, <<<\([eE]\|[vV][aA][uU][lL][tT]-?\)[iI][pP]-\(.*\)>>>, <<<\2>>>)) # Strip EIP- or Vault(-)IP-
+m4_define(M4_FWCONFIGSTR, <<<m4_regexp>>>(M4_FWCONFIG, <<<\([fF][wW]\|[fF][iI][rR][mM][wW][aA][rR][eE]\)-?\(.*\)>>>, <<<\2>>>)) # Strip FW(-) or FIRMWARE(-) (case insensitive)
+#-------------------------------------------------------------------------------
+# These are used in many packaging related files and release notes as a
+# shorthand for the configuration name, but just the "letters" of it.
+#-------------------------------------------------------------------------------
+m4_define(M4_HWCONFIGLTR, <<<m4_regexp>>>(<<<M4_HWCONFIGSTR>>>, <<<[0-9]+\([^0-9]*.*\)>>>, <<<\1>>>))
+
+# Used for solving special packaging issues
+m4_define(M4_PYTESTAPP, <<<0>>>)
+m4_define(M4_RENAME_RTLFILES, <<<0>>>)
+
+#-------------------------------------------------------------------------------
+# The default bus type symbols are moved to a separate file to allow reading
+# them from prepare_customization.pl
+# Also the M4_IFCSTR macro has been moved there.
+# For pre-processing software, stuff dealing with the license type is also put
+# in the interface_defines to save creation of yet another file.
+#-------------------------------------------------------------------------------
+m4_include(interface_defines_m4.std)
+
+#-------------------------------------------------------------------------------
+# The list of parameters in customer_defines allows us to use a global parameter
+# identifying customer specific configurations across projects
+# using the same identifier. Mainly this is used for packaging and
+# release notes. Default set to 0 for internal.
+#-------------------------------------------------------------------------------
+m4_define(M4_CUSTOMER, <<<0>>>)
+m4_define(M4_OUR_COMPANY, <<<INSIDE Secure>>>)
+
+m4_include(customer_defines_m4.std)
+
+#-------------------------------------------------------------------------------
+# Header information
+# This configuration parameter can be overruled by module specific definitions
+m4_define(M4_CONFIGURATION, <<<>>>)
+
+# copyright claim, with proper year formatting
+m4_define(M4_COPYRIGHT_CLAIM,
+          <<<Copyright (c) m4_ifelse(M4_START_YEAR,
+                                     m4_year,
+                                     m4_year,
+                                     M4_START_YEAR-m4_year) M4_OUR_COMPANY B.V. All Rights Reserved>>>)
+
+#-------------------------------------------------------------------------------
+# Header insertion macros.
+#
+# If the "need CRI license" macro is set, a mandatory clause from the CRI
+# distribution contract is inserted.
+#
+# 
+#-------------------------------------------------------------------------------
+
+m4_define(M4_PLAIN_HEADER_CRI, <<<
+This implementation incorporates countermeasures to power analysis and/or
+other external monitoring attacks covered by patents owned by Cryptography
+Research, Inc. ("CRI") or its affiliates.
+This implementation is authorized for distribution only:
+(a) in the form of a loan, for evaluation purposes, by recipients who have
+executed a certification (in a form prescribed and countersigned by CRI
+and CRI's authorized developer) that the recipient meets certain
+evaluation loan criteria established by CRI; or
+(b) for inclusion in products of recipients who have executed a
+certification (in a form prescribed by CRI and countersigned by CRI's
+authorized developer) that the products are produced under a valid and
+subsisting license which must be obtained separately from CRI.
+All other use or redistribution is prohibited.>>>)
+
+m4_define(<<<M4_PLAIN_HEADER>>>, <<<M4_COPYRIGHT_CLAIM
+
+This confidential and proprietary software may be used only as authorized by a
+licensing agreement from M4_OUR_COMPANY.
+
+The entire notice above must be reproduced on all authorized copies that may
+only be made to the extent permitted by a licensing agreement from
+M4_OUR_COMPANY.<<<>>>m4_ifdef(M4_NEED_CRI_LIC, <<<m4_ifelse(M4_NEED_CRI_LIC, 1, <<<
+M4_PLAIN_HEADER_CRI>>>)>>>)>>>)
+
+m4_define(M4_SUPPORT_CLAUSE, <<<The preferred method for getting technical support is to use our online support
+system at https://customersupport.insidesecure.com. If you do not have an
+account yet for this system, please contact M4_OUR_COMPANY embedded hardware
+technical support (ESSEmbeddedHW-Support@insidesecure.com).>>>)
+
+m4_define(M4_HDL_HEADER_CRI, <<<
+// This implementation incorporates countermeasures to power analysis and/or
+// other external monitoring attacks covered by patents owned by Cryptography
+// Research, Inc. ("CRI") or its affiliates.
+// This implementation is authorized for distribution only:
+// (a) in the form of a loan, for evaluation purposes, by recipients who have
+// executed a certification (in a form prescribed and countersigned by CRI
+// and CRI's authorized developer) that the recipient meets certain
+// evaluation loan criteria established by CRI; or
+// (b) for inclusion in products of recipients who have executed a
+// certification (in a form prescribed by CRI and countersigned by CRI's
+// authorized developer) that the products are produced under a valid and
+// subsisting license which must be obtained separately from CRI.
+// All other use or redistribution is prohibited.
+//----------------------------------------------------------------------------->>>)
+
+m4_define(<<<M4_HDL_HEADER_STANDARD>>>, <<<//-----------------------------------------------------------------------------
+//
+//   Module        : m4_ifelse(M4_CUSTOM_MODULENAME, <<<>>>, M4_MODULENAME, M4_CUSTOM_MODULENAME<<< (Custom)>>>)
+//   Version       : m4_ifelse(M4_CUSTOM_VERSION, <<<>>>, M4_VERSION, M4_CUSTOM_VERSION<<< (Custom)>>>)
+//   Configuration : m4_ifelse(M4_CUSTOM_CONFIGURATION, <<<>>>, M4_CONFIGURATION, M4_CUSTOM_CONFIGURATION<<< (Custom)>>>)
+//
+//   Date          : m4_date
+//
+// M4_COPYRIGHT_CLAIM
+//
+// This confidential and proprietary software may be used only as authorized
+// by a licensing agreement from M4_OUR_COMPANY.
+//
+// The entire notice above must be reproduced on all authorized copies that
+// may only be made to the extent permitted by a licensing agreement from
+// M4_OUR_COMPANY.
+//
+// For more information or support, please go to our online support system at
+// https://customersupport.insidesecure.com.
+// In case you do not have an account for this system, please send an e-mail
+// to ESSEmbeddedHW-Support@insidesecure.com.
+//-----------------------------------------------------------------------------<<<>>>m4_ifdef(M4_NEED_CRI_LIC, <<<m4_ifelse(M4_NEED_CRI_LIC, 1, <<<M4_HDL_HEADER_CRI>>>)>>>)>>>)
+
+m4_define(M4_SYNTH_HEADER_CRI, <<<
+# This implementation incorporates countermeasures to power analysis and/or
+# other external monitoring attacks covered by patents owned by Cryptography
+# Research, Inc. ("CRI") or its affiliates.
+# This implementation is authorized for distribution only:
+# (a) in the form of a loan, for evaluation purposes, by recipients who have
+# executed a certification (in a form prescribed and countersigned by CRI
+# and CRI's authorized developer) that the recipient meets certain
+# evaluation loan criteria established by CRI; or
+# (b) for inclusion in products of recipients who have executed a
+# certification (in a form prescribed by CRI and countersigned by CRI's
+# authorized developer) that the products are produced under a valid and
+# subsisting license which must be obtained separately from CRI.
+# All other use or redistribution is prohibited.
+#------------------------------------------------------------------------------>>>)
+
+m4_define(M4_SYNTH_HEADER_STANDARD, <<<#------------------------------------------------------------------------------
+#
+#    Module        : m4_ifelse(M4_CUSTOM_MODULENAME, <<<>>>, M4_MODULENAME, M4_CUSTOM_MODULENAME<<< (Custom)>>>)
+#    Version       : m4_ifelse(M4_CUSTOM_VERSION, <<<>>>, M4_VERSION, M4_CUSTOM_VERSION<<< (Custom)>>>)
+#    Configuration : m4_ifelse(M4_CUSTOM_CONFIGURATION, <<<>>>, M4_CONFIGURATION, M4_CUSTOM_CONFIGURATION<<< (Custom)>>>)
+#
+#    Date          : m4_date
+#
+#  M4_COPYRIGHT_CLAIM
+#
+#  This confidential and proprietary software may be used only as authorized
+#  by a licensing agreement from M4_OUR_COMPANY.
+#
+#  The entire notice above must be reproduced on all authorized copies that
+#  may only be made to the extent permitted by a licensing agreement from
+#  M4_OUR_COMPANY.
+#
+#  For more information or support, please go to our online support system at
+#  https://customersupport.insidesecure.com.
+#  In case you do not have an account for this system, please send an e-mail
+#  to ESSEmbeddedHW-Support@insidesecure.com.
+#------------------------------------------------------------------------------<<<>>>m4_ifdef(M4_NEED_CRI_LIC, <<<m4_ifelse(M4_NEED_CRI_LIC, 1, <<<M4_SYNTH_HEADER_CRI>>>)>>>)>>>)
+
+m4_define(M4_CSTYLE_HEADER_CRI, <<<
+/* This implementation incorporates countermeasures to power analysis and/or  */
+/* other external monitoring attacks covered by patents owned by Cryptography */
+/* Research, Inc. ("CRI") or its affiliates.                                  */
+/* This implementation is authorized for distribution only:                   */
+/* (a) in the form of a loan, for evaluation purposes, by recipients who have */
+/* executed a certification (in a form prescribed and countersigned by CRI    */
+/* and CRI's authorized developer) that the recipient meets certain           */
+/* evaluation loan criteria established by CRI; or                            */
+/* (b) for inclusion in products of recipients who have executed a            */
+/* certification (in a form prescribed by CRI and countersigned by CRI's      */
+/* authorized developer) that the products are produced under a valid and     */
+/* subsisting license which must be obtained separately from CRI.             */
+/* All other use or redistribution is prohibited.                             */
+/* -------------------------------------------------------------------------- */>>>)
+
+m4_define(M4_CSTYLE_HEADER_STANDARD, <<</* -------------------------------------------------------------------------- */
+/*                                                                            */
+/*   Module        : m4_format(%-55s, m4_ifelse(M4_CUSTOM_MODULENAME, <<<>>>, M4_MODULENAME, M4_CUSTOM_MODULENAME<<< (Custom)>>>))  */
+/*   Version       : m4_format(%-55s, m4_ifelse(M4_CUSTOM_VERSION, <<<>>>, M4_VERSION, M4_CUSTOM_VERSION<<< (Custom)>>>))  */
+/*   Configuration : m4_format(%-55s, m4_ifelse(M4_CUSTOM_CONFIGURATION, <<<>>>, M4_CONFIGURATION, M4_CUSTOM_CONFIGURATION<<< (Custom)>>>))  */
+/*                                                                            */
+/*   Date          : m4_date                                              */
+/*                                                                            */
+/* m4_format(%-74s, M4_COPYRIGHT_CLAIM) */
+/*                                                                            */
+/* This confidential and proprietary software may be used only as authorized  */
+/* by a licensing agreement from M4_OUR_COMPANY.                               */
+/*                                                                            */
+/* The entire notice above must be reproduced on all authorized copies that   */
+/* may only be made to the extent permitted by a licensing agreement from     */
+/* M4_OUR_COMPANY.                                                             */
+/*                                                                            */
+/* For more information or support, please go to our online support system at */
+/* https://customersupport.insidesecure.com.                                  */
+/* In case you do not have an account for this system, please send an e-mail  */
+/* to ESSEmbeddedHW-Support@insidesecure.com.                                 */
+/* -------------------------------------------------------------------------- */<<<>>>m4_ifdef(M4_NEED_CRI_LIC, <<<m4_ifelse(M4_NEED_CRI_LIC, 1, <<<M4_CSTYLE_HEADER_CRI>>>)>>>)>>>)
+
+m4_define(M4_ASM_HEADER_CRI, <<<
+; This implementation incorporates countermeasures to power analysis and/or
+; other external monitoring attacks covered by patents owned by Cryptography
+; Research, Inc. ("CRI") or its affiliates.
+; This implementation is authorized for distribution only:
+; (a) in the form of a loan, for evaluation purposes, by recipients who have
+; executed a certification (in a form prescribed and countersigned by CRI
+; and CRI's authorized developer) that the recipient meets certain
+; evaluation loan criteria established by CRI; or
+; (b) for inclusion in products of recipients who have executed a
+; certification (in a form prescribed by CRI and countersigned by CRI's
+; authorized developer) that the products are produced under a valid and
+; subsisting license which must be obtained separately from CRI.
+; All other use or redistribution is prohibited.
+;------------------------------------------------------------------------------>>>)
+
+m4_define(M4_ASM_HEADER_STANDARD, <<<;------------------------------------------------------------------------------
+;
+;    Module        : m4_ifelse(M4_CUSTOM_MODULENAME, <<<>>>, M4_MODULENAME, M4_CUSTOM_MODULENAME<<< (Custom)>>>)
+;    Version       : m4_ifelse(M4_CUSTOM_VERSION, <<<>>>, M4_VERSION, M4_CUSTOM_VERSION<<< (Custom)>>>)
+;    Configuration : m4_ifelse(M4_CUSTOM_CONFIGURATION, <<<>>>, M4_CONFIGURATION, M4_CUSTOM_CONFIGURATION<<< (Custom)>>>)
+;
+;    Date          : m4_date
+;
+;  M4_COPYRIGHT_CLAIM
+;
+;  This confidential and proprietary software may be used only as authorized
+;  by a licensing agreement from M4_OUR_COMPANY.
+;
+;  The entire notice above must be reproduced on all authorized copies that
+;  may only be made to the extent permitted by a licensing agreement from
+;  M4_OUR_COMPANY.
+;
+;  For more information or support, please go to our online support system at
+;  https://customersupport.insidesecure.com.
+;  In case you do not have an account for this system, please send an e-mail
+;  to ESSEmbeddedHW-Support@insidesecure.com.
+;------------------------------------------------------------------------------<<<>>>m4_ifdef(M4_NEED_CRI_LIC, <<<m4_ifelse(M4_NEED_CRI_LIC, 1, <<<M4_ASM_HEADER_CRI>>>)>>>)>>>)
